@@ -3,10 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#0c0c0e">
-
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Stringboard">
@@ -105,6 +103,7 @@
       align-items: center;
       overflow-x: auto;
       border-bottom: 1px solid #2a2a30;
+      min-height: 36px;
     }
 
     #layout-panel {
@@ -128,10 +127,9 @@
       display: flex;
       position: relative;
       width: 100%;
-      height: calc(100vh - 135px);
+      min-height: 300px;
     }
 
-    /* Trigger Zone placed on the LEFT side */
     #trigger-zone {
       width: 140px;
       background: #18181c;
@@ -226,14 +224,14 @@
       left: 50%;
       transform: translate(-50%, -50%);
       width: 52px;
-      height: 3mm;
+      height: 22px;
       background: linear-gradient(180deg, #a87b51 0%, #855b35 100%);
       border: 1px solid var(--wood-border);
-      border-radius: 2px;
+      border-radius: 3px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 8px;
+      font-size: 10px;
       font-weight: bold;
       color: #ffffff;
       box-shadow: 0 1px 3px rgba(0,0,0,0.6);
@@ -370,35 +368,45 @@
       rhTriggerStates: []
     };
 
-    const AudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    let AudioCtx = null;
     const activeTriggerSynths = new Map();
 
+    function getAudioContext() {
+      if (!AudioCtx) {
+        AudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (AudioCtx.state === 'suspended') {
+        AudioCtx.resume();
+      }
+      return AudioCtx;
+    }
+
     function createSynthesizer(freq) {
-      if (AudioCtx.state === 'suspended') AudioCtx.resume();
+      const ctx = getAudioContext();
       
-      const osc = AudioCtx.createOscillator();
-      const gain = AudioCtx.createGain();
-      const filter = AudioCtx.createBiquadFilter();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
 
       osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(freq, AudioCtx.currentTime);
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
 
       filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(2200, AudioCtx.currentTime);
+      filter.frequency.setValueAtTime(2200, ctx.currentTime);
 
-      gain.gain.setValueAtTime(0.01, AudioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.3, AudioCtx.currentTime + 0.05);
+      gain.gain.setValueAtTime(0.01, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + 0.05);
 
       osc.connect(filter);
       filter.connect(gain);
-      gain.connect(AudioCtx.destination);
+      gain.connect(ctx.destination);
 
       osc.start();
       return { osc, gain, filter };
     }
 
     function stopSynthesizer(synth) {
-      if (!synth) return;
+      if (!synth || !AudioCtx) return;
       synth.gain.gain.exponentialRampToValueAtTime(0.001, AudioCtx.currentTime + 0.08);
       setTimeout(() => {
         try { synth.osc.stop(); synth.osc.disconnect(); } catch(e){}
@@ -407,10 +415,11 @@
 
     function calculateFretPositions(scaleLen, boardHeight, maxFrets) {
       const frets = [];
+      const effectiveHeight = boardHeight > 0 ? boardHeight : 600;
       for (let n = 1; n <= maxFrets; n++) {
         const d_n = scaleLen * (1 - Math.pow(2, -n / 12));
         const fraction = d_n / scaleLen;
-        frets.push({ fretNumber: n, fraction, pixelY: fraction * boardHeight });
+        frets.push({ fretNumber: n, fraction, pixelY: fraction * effectiveHeight });
       }
       return frets;
     }
@@ -439,6 +448,8 @@
       const stringGroup = document.getElementById('stringGroup');
       const triggerContainer = document.getElementById('trigger-container');
       const tuningControls = document.getElementById('tuningControls');
+
+      if (!stringGroup || !triggerContainer || !tuningControls) return;
 
       stringGroup.innerHTML = '';
       triggerContainer.innerHTML = '';
@@ -531,13 +542,15 @@
       });
 
       renderFrets();
+      setTimeout(renderFrets, 100);
     }
 
     function renderFrets() {
       const container = document.getElementById('fingerboard-container');
+      if (!container) return;
       document.querySelectorAll('.fret-block').forEach(el => el.remove());
 
-      const boardHeight = container.clientHeight;
+      const boardHeight = container.clientHeight || 500;
       const frets = calculateFretPositions(state.scaleLength, boardHeight, state.numFrets);
       const wrappers = document.querySelectorAll('.string-wrapper');
 
@@ -622,7 +635,7 @@
 
       updateMarkerPos(touchData.marker, x, y);
 
-      if (touchData.synth) {
+      if (touchData.synth && AudioCtx) {
         touchData.synth.osc.frequency.setValueAtTime(touchData.pitch, AudioCtx.currentTime);
       }
       updateTriggerSynth(touchData.stringIdx);
@@ -662,7 +675,7 @@
       if (isPressed) {
         if (!activeTriggerSynths.has(activeSynthKey)) {
           activeTriggerSynths.set(activeSynthKey, createSynthesizer(activePitch));
-        } else {
+        } else if (AudioCtx) {
           activeTriggerSynths.get(activeSynthKey).osc.frequency.setValueAtTime(activePitch, AudioCtx.currentTime);
         }
       } else {
@@ -689,3 +702,63 @@
     document.getElementById('scaleLength').addEventListener('change', (e) => {
       state.scaleLength = parseFloat(e.target.value) || 326;
       renderFrets();
+    });
+
+    document.getElementById('fretCount').addEventListener('change', (e) => {
+      state.numFrets = parseInt(e.target.value) || 14;
+      renderFrets();
+    });
+
+    document.getElementById('stringCount').addEventListener('change', (e) => {
+      let count = parseInt(e.target.value) || 4;
+      count = Math.max(1, Math.min(7, count));
+      e.target.value = count;
+
+      while (state.strings.length < count) {
+        const lastFreq = state.strings[state.strings.length - 1]?.freq || 220;
+        state.strings.push({ freq: parseFloat((lastFreq * 1.5).toFixed(2)), isCustom: false });
+      }
+      while (state.strings.length > count) {
+        state.strings.pop();
+      }
+      rebuildLayout();
+    });
+
+    document.getElementById('btnModeTouch').addEventListener('click', (e) => {
+      state.directTouch = !state.directTouch;
+      e.target.classList.toggle('active', state.directTouch);
+      e.target.textContent = `Direct Touch ${state.directTouch ? 'ON' : 'OFF'}`;
+    });
+
+    document.getElementById('btnToggleLabels').addEventListener('click', (e) => {
+      state.showNotes = !state.showNotes;
+      e.target.textContent = `Show Notes: ${state.showNotes ? 'ON' : 'OFF'}`;
+      renderFrets();
+    });
+
+    document.getElementById('stringSpacing').addEventListener('input', (e) => {
+      document.getElementById('stringGroup').style.gap = `${e.target.value}px`;
+    });
+
+    document.getElementById('stringGroupX').addEventListener('input', (e) => {
+      document.getElementById('stringGroup').style.left = `${e.target.value}%`;
+    });
+
+    document.getElementById('triggerSpacing').addEventListener('input', (e) => {
+      document.getElementById('trigger-container').style.gap = `${e.target.value}px`;
+    });
+
+    document.getElementById('triggerOffsetY').addEventListener('input', (e) => {
+      document.getElementById('trigger-container').style.transform = `translateY(${e.target.value}px)`;
+    });
+
+    window.addEventListener('resize', renderFrets);
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', rebuildLayout);
+    } else {
+      rebuildLayout();
+    }
+  </script>
+</body>
+</html>
