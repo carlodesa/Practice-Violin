@@ -2,15 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Stringboard">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0c0c0e">
+
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Stringboard">
+
+  <link rel="manifest" href='data:application/manifest+json,{"name":"Stringboard","short_name":"Stringboard","start_url":".","display":"fullscreen","orientation":"landscape","background_color":"#0c0c0e","theme_color":"#0c0c0e","icons":[{"src":"data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎻</text></svg>","sizes":"192x192","type":"image/svg+xml"}]}'>
+
   <title>Violin & String Practice Fingerboard</title>
   <style>
     :root {
@@ -687,58 +689,3 @@
     document.getElementById('scaleLength').addEventListener('change', (e) => {
       state.scaleLength = parseFloat(e.target.value) || 326;
       renderFrets();
-    });
-
-    document.getElementById('fretCount').addEventListener('change', (e) => {
-      state.numFrets = parseInt(e.target.value) || 14;
-      renderFrets();
-    });
-
-    document.getElementById('stringCount').addEventListener('change', (e) => {
-      let count = parseInt(e.target.value) || 4;
-      count = Math.max(1, Math.min(7, count));
-      e.target.value = count;
-
-      while (state.strings.length < count) {
-        const lastFreq = state.strings[state.strings.length - 1]?.freq || 220;
-        state.strings.push({ freq: parseFloat((lastFreq * 1.5).toFixed(2)), isCustom: false });
-      }
-      while (state.strings.length > count) {
-        state.strings.pop();
-      }
-      rebuildLayout();
-    });
-
-    document.getElementById('btnModeTouch').addEventListener('click', (e) => {
-      state.directTouch = !state.directTouch;
-      e.target.classList.toggle('active', state.directTouch);
-      e.target.textContent = `Direct Touch ${state.directTouch ? 'ON' : 'OFF'}`;
-    });
-
-    document.getElementById('btnToggleLabels').addEventListener('click', (e) => {
-      state.showNotes = !state.showNotes;
-      e.target.textContent = `Show Notes: ${state.showNotes ? 'ON' : 'OFF'}`;
-      renderFrets();
-    });
-
-    document.getElementById('stringSpacing').addEventListener('input', (e) => {
-      document.getElementById('stringGroup').style.gap = `${e.target.value}px`;
-    });
-
-    document.getElementById('stringGroupX').addEventListener('input', (e) => {
-      document.getElementById('stringGroup').style.left = `${e.target.value}%`;
-    });
-
-    document.getElementById('triggerSpacing').addEventListener('input', (e) => {
-      document.getElementById('trigger-container').style.gap = `${e.target.value}px`;
-    });
-
-    document.getElementById('triggerOffsetY').addEventListener('input', (e) => {
-      document.getElementById('trigger-container').style.transform = `translateY(${e.target.value}px)`;
-    });
-
-    window.addEventListener('resize', renderFrets);
-    window.addEventListener('load', rebuildLayout);
-  </script>
-</body>
-</html>
