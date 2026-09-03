@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Stringboard">
+  <title>Violin & String Practice Fingerboard</title>
+  <style>
+    :root {
+      --bg-color: #0c0c0e;
+      --panel-bg: #1e1e24;
+      --accent: #d4a373;
+      --text-color: #f0f0f0;
+      --wood-fret: #966f42;
+      --wood-border: #b88b56;
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100vw;
+      height: 100vh;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    header {
+      background: var(--panel-bg);
+      padding: 8px 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 2px solid #3a3a42;
+      z-index: 100;
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    input[type="number"], select {
+      background: #111;
+      border: 1px solid #555;
+      color: #fff;
+      padding: 4px 6px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+
+    input[type="number"] { width: 60px; }
+
+    input[type="range"] {
+      width: 75px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    button {
+      background: #3a3a42;
+      color: #fff;
+      border: 1px solid #555;
+      padding: 5px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    button.active {
+      background: var(--accent);
+      color: #111;
+      font-weight: bold;
+    }
+
+    #tuning-panel, #layout-panel {
+      background: #16161a;
+      padding: 6px 12px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      overflow-x: auto;
+      border-bottom: 1px solid #2a2a30;
+    }
+
+    #layout-panel {
+      background: #121215;
+    }
+
+    .string-tune-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      background: #222228;
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: 1px solid #383842;
+      white-space: nowrap;
+    }
+
+    #app-container {
+      flex: 1;
+      display: flex;
+      position: relative;
+      width: 100%;
+      height: calc(100vh - 135px);
+    }
+
+    /* Trigger Zone placed on the LEFT side */
+    #trigger-zone {
+      width: 140px;
+      background: #18181c;
+      border-right: 2px solid #2e2e36;
+      padding: 8px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    #trigger-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      position: relative;
+      transition: transform 0.05s ease-out;
+    }
+
+    .trigger-btn {
+      width: 100px;
+      height: 48px;
+      border-radius: 8px;
+      background: #2a2a32;
+      border: 2px solid var(--accent);
+      color: #fff;
+      font-size: 12px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.4);
+      touch-action: none;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .trigger-btn:active, .trigger-btn.pressed {
+      background: var(--accent);
+      color: #000;
+      transform: scale(0.96);
+    }
+
+    #fingerboard-container {
+      flex: 1;
+      position: relative;
+      background: #08080a;
+      margin: 6px;
+      border-radius: 6px;
+      box-shadow: inset 0 0 12px #000;
+      overflow: hidden;
+    }
+
+    .string-group {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      display: flex;
+      justify-content: center;
+      align-items: stretch;
+      left: 50%;
+      transform: translateX(-50%);
+      gap: 60px;
+      transition: left 0.05s ease-out;
+    }
+
+    .string-wrapper {
+      position: relative;
+      height: 100%;
+      width: 52px;
+      display: flex;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .string {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #ffffff;
+      width: 2px;
+      box-shadow: 0 0 4px rgba(255, 255, 255, 0.8);
+      z-index: 1;
+    }
+
+    .fret-block {
+      position: absolute;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 52px;
+      height: 3mm;
+      background: linear-gradient(180deg, #a87b51 0%, #855b35 100%);
+      border: 1px solid var(--wood-border);
+      border-radius: 2px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 8px;
+      font-weight: bold;
+      color: #ffffff;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.6);
+      pointer-events: none;
+      z-index: 2;
+      text-shadow: 0 1px 2px #000;
+      white-space: nowrap;
+    }
+
+    .finger-touch {
+      position: absolute;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: rgba(212, 163, 115, 0.9);
+      border: 2px solid #fff;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      box-shadow: 0 0 12px var(--accent);
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="control-group">
+      <label>Preset:</label>
+      <select id="presetSelect">
+        <option value="violin">Violin (G3, D4, A4, E5)</option>
+        <option value="viola">Viola (C3, G3, D4, A4)</option>
+        <option value="cello">Cello (C2, G2, D3, A3)</option>
+        <option value="bass">Double Bass (E1, A1, D2, G2)</option>
+        <option value="custom">Custom</option>
+      </select>
+    </div>
+
+    <div class="control-group">
+      <label for="scaleLength">Scale (mm):</label>
+      <input type="number" id="scaleLength" value="326" min="100" max="1200">
+    </div>
+
+    <div class="control-group">
+      <label for="fretCount">Frets:</label>
+      <input type="number" id="fretCount" value="14" min="5" max="24">
+    </div>
+
+    <div class="control-group">
+      <label for="stringCount">Strings:</label>
+      <input type="number" id="stringCount" value="4" min="1" max="7">
+    </div>
+
+    <div class="control-group">
+      <button id="btnModeTouch" class="active">Direct Touch ON</button>
+      <button id="btnToggleLabels">Show Notes: ON</button>
+    </div>
+  </header>
+
+  <div id="tuning-panel">
+    <span style="font-size: 12px; font-weight: bold; color: var(--accent);">Tuning:</span>
+    <div id="tuningControls" style="display: flex; gap: 8px;"></div>
+  </div>
+
+  <div id="layout-panel">
+    <span style="font-size: 12px; font-weight: bold; color: var(--accent);">Layout:</span>
+    
+    <div class="control-group">
+      <label for="stringSpacing">String Spacing:</label>
+      <input type="range" id="stringSpacing" min="10" max="160" value="60">
+    </div>
+
+    <div class="control-group">
+      <label for="stringGroupX">Strings Group X:</label>
+      <input type="range" id="stringGroupX" min="0" max="100" value="50">
+    </div>
+
+    <div class="control-group">
+      <label for="triggerSpacing">Trigger Spacing:</label>
+      <input type="range" id="triggerSpacing" min="0" max="50" value="8">
+    </div>
+
+    <div class="control-group">
+      <label for="triggerOffsetY">Triggers Group Y:</label>
+      <input type="range" id="triggerOffsetY" min="-250" max="250" value="0">
+    </div>
+  </div>
+
+  <div id="app-container">
+    <div id="trigger-zone">
+      <div id="trigger-container"></div>
+    </div>
+
+    <div id="fingerboard-container">
+      <div class="string-group" id="stringGroup"></div>
+    </div>
+  </div>
+
+  <script>
+    const NOTE_NAMES = ['C', 'C#/Db', 'D', 'D#/Eb', 'E', 'F', 'F#/Gb', 'G', 'G#/Ab', 'A', 'A#/Bb', 'B'];
+
+    function generateNoteTable() {
+      const notes = [];
+      for (let midi = 21; midi <= 108; midi++) {
+        const noteIndex = midi % 12;
+        const octave = Math.floor(midi / 12) - 1;
+        const name = `${NOTE_NAMES[noteIndex]}${octave}`;
+        const freq = 440 * Math.pow(2, (midi - 69) / 12);
+        notes.push({ name, freq: parseFloat(freq.toFixed(2)), midi });
+      }
+      return notes;
+    }
+
+    const noteTable = generateNoteTable();
+
+    const presets = {
+      violin: { scale: 326, frets: 14, strings: [196.00, 293.66, 440.00, 659.25] },
+      viola:  { scale: 375, frets: 14, strings: [130.81, 196.00, 293.66, 440.00] },
+      cello:  { scale: 690, frets: 12, strings: [65.41, 98.00, 146.83, 220.00] },
+      bass:   { scale: 1050, frets: 12, strings: [41.20, 55.00, 73.42, 98.00] }
+    };
+
+    const state = {
+      scaleLength: 326,
+      numFrets: 14,
+      directTouch: true,
+      showNotes: true,
+      activeTouches: new Map(),
+      strings: [
+        { freq: 196.00, isCustom: false },
+        { freq: 293.66, isCustom: false },
+        { freq: 440.00, isCustom: false },
+        { freq: 659.25, isCustom: false }
+      ],
+      rhTriggerStates: []
+    };
+
+    const AudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const activeTriggerSynths = new Map();
+
+    function createSynthesizer(freq) {
+      if (AudioCtx.state === 'suspended') AudioCtx.resume();
+      
+      const osc = AudioCtx.createOscillator();
+      const gain = AudioCtx.createGain();
+      const filter = AudioCtx.createBiquadFilter();
+
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(freq, AudioCtx.currentTime);
+
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(2200, AudioCtx.currentTime);
+
+      gain.gain.setValueAtTime(0.01, AudioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.3, AudioCtx.currentTime + 0.05);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(AudioCtx.destination);
+
+      osc.start();
+      return { osc, gain, filter };
+    }
+
+    function stopSynthesizer(synth) {
+      if (!synth) return;
+      synth.gain.gain.exponentialRampToValueAtTime(0.001, AudioCtx.currentTime + 0.08);
+      setTimeout(() => {
+        try { synth.osc.stop(); synth.osc.disconnect(); } catch(e){}
+      }, 100);
+    }
+
+    function calculateFretPositions(scaleLen, boardHeight, maxFrets) {
+      const frets = [];
+      for (let n = 1; n <= maxFrets; n++) {
+        const d_n = scaleLen * (1 - Math.pow(2, -n / 12));
+        const fraction = d_n / scaleLen;
+        frets.push({ fretNumber: n, fraction, pixelY: fraction * boardHeight });
+      }
+      return frets;
+    }
+
+    function getNoteLabel(baseFreq, semitonesFromBase) {
+      const midiBase = Math.round(69 + 12 * Math.log2(baseFreq / 440));
+      const targetMidi = midiBase + semitonesFromBase;
+      const noteIndex = (targetMidi % 12 + 12) % 12;
+      return NOTE_NAMES[noteIndex];
+    }
+
+    function findClosestNoteValue(freq) {
+      let closest = noteTable[0];
+      let minDiff = Math.abs(freq - closest.freq);
+      for (let note of noteTable) {
+        const diff = Math.abs(freq - note.freq);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closest = note;
+        }
+      }
+      return minDiff < 0.5 ? closest.freq.toString() : 'custom';
+    }
+
+    function rebuildLayout() {
+      const stringGroup = document.getElementById('stringGroup');
+      const triggerContainer = document.getElementById('trigger-container');
+      const tuningControls = document.getElementById('tuningControls');
+
+      stringGroup.innerHTML = '';
+      triggerContainer.innerHTML = '';
+      tuningControls.innerHTML = '';
+
+      state.rhTriggerStates = new Array(state.strings.length).fill(false);
+
+      state.strings.forEach((str, idx) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'string-wrapper';
+        wrapper.id = `string-${idx}`;
+        const stringEl = document.createElement('div');
+        stringEl.className = 'string';
+        const stringWidth = Math.max(1.5, 4.5 - (idx * 0.5));
+        stringEl.style.width = `${stringWidth}px`;
+        wrapper.appendChild(stringEl);
+        stringGroup.appendChild(wrapper);
+
+        const btn = document.createElement('div');
+        btn.className = 'trigger-btn';
+        btn.dataset.string = idx;
+        btn.textContent = getNoteLabel(str.freq, 0);
+
+        btn.addEventListener('pointerdown', () => {
+          btn.classList.add('pressed');
+          state.rhTriggerStates[idx] = true;
+          updateTriggerSynth(idx);
+        });
+
+        const releaseTrigger = () => {
+          btn.classList.remove('pressed');
+          state.rhTriggerStates[idx] = false;
+          updateTriggerSynth(idx);
+        };
+
+        btn.addEventListener('pointerup', releaseTrigger);
+        btn.addEventListener('pointercancel', releaseTrigger);
+        triggerContainer.appendChild(btn);
+
+        const tuneItem = document.createElement('div');
+        tuneItem.className = 'string-tune-item';
+        
+        const noteSelect = document.createElement('select');
+        noteTable.forEach(n => {
+          const opt = document.createElement('option');
+          opt.value = n.freq;
+          opt.textContent = `${n.name} (${n.freq} Hz)`;
+          noteSelect.appendChild(opt);
+        });
+        const customOpt = document.createElement('option');
+        customOpt.value = 'custom';
+        customOpt.textContent = 'Custom (Hz)';
+        noteSelect.appendChild(customOpt);
+
+        const customInput = document.createElement('input');
+        customInput.type = 'number';
+        customInput.step = '0.1';
+        customInput.value = str.freq;
+        customInput.style.width = '65px';
+        customInput.style.display = str.isCustom ? 'inline-block' : 'none';
+
+        const matchedVal = str.isCustom ? 'custom' : findClosestNoteValue(str.freq);
+        noteSelect.value = matchedVal;
+
+        noteSelect.addEventListener('change', (e) => {
+          if (e.target.value === 'custom') {
+            str.isCustom = true;
+            customInput.style.display = 'inline-block';
+            str.freq = parseFloat(customInput.value) || 220;
+          } else {
+            str.isCustom = false;
+            customInput.style.display = 'none';
+            str.freq = parseFloat(e.target.value);
+            customInput.value = str.freq;
+          }
+          btn.textContent = getNoteLabel(str.freq, 0);
+          renderFrets();
+        });
+
+        customInput.addEventListener('change', (e) => {
+          str.freq = parseFloat(e.target.value) || 220;
+          btn.textContent = getNoteLabel(str.freq, 0);
+          renderFrets();
+        });
+
+        tuneItem.appendChild(document.createTextNode(`S${idx + 1}: `));
+        tuneItem.appendChild(noteSelect);
+        tuneItem.appendChild(customInput);
+        tuningControls.appendChild(tuneItem);
+      });
+
+      renderFrets();
+    }
+
+    function renderFrets() {
+      const container = document.getElementById('fingerboard-container');
+      document.querySelectorAll('.fret-block').forEach(el => el.remove());
+
+      const boardHeight = container.clientHeight;
+      const frets = calculateFretPositions(state.scaleLength, boardHeight, state.numFrets);
+      const wrappers = document.querySelectorAll('.string-wrapper');
+
+      wrappers.forEach((wrapper, strIdx) => {
+        if (!state.strings[strIdx]) return;
+        const baseFreq = state.strings[strIdx].freq;
+        frets.forEach(fret => {
+          const fretEl = document.createElement('div');
+          fretEl.className = 'fret-block';
+          fretEl.style.top = `${fret.pixelY}px`;
+          
+          if (state.showNotes) {
+            fretEl.textContent = getNoteLabel(baseFreq, fret.fretNumber);
+          } else {
+            fretEl.textContent = '';
+          }
+          wrapper.appendChild(fretEl);
+        });
+      });
+    }
+
+    function calculatePitch(stringIdx, yFraction) {
+      const baseFreq = state.strings[stringIdx].freq;
+      const clampedFraction = Math.max(0, Math.min(yFraction, 0.75));
+      return baseFreq / (1 - clampedFraction);
+    }
+
+    const fingerboard = document.getElementById('fingerboard-container');
+
+    fingerboard.addEventListener('pointerdown', handleTouchStart);
+    fingerboard.addEventListener('pointermove', handleTouchMove);
+    fingerboard.addEventListener('pointerup', handleTouchEnd);
+    fingerboard.addEventListener('pointercancel', handleTouchEnd);
+
+    function handleTouchStart(e) {
+      const rect = fingerboard.getBoundingClientRect();
+      const y = e.clientY - rect.top;
+      const x = e.clientX - rect.left;
+      const yFraction = y / rect.height;
+
+      const wrappers = document.querySelectorAll('.string-wrapper');
+      let closestIdx = 0;
+      let minDistance = Infinity;
+
+      wrappers.forEach((w, idx) => {
+        const wRect = w.getBoundingClientRect();
+        const center = wRect.left + wRect.width / 2 - rect.left;
+        const dist = Math.abs(x - center);
+        if (dist < minDistance) {
+          minDistance = dist;
+          closestIdx = idx;
+        }
+      });
+
+      const marker = document.createElement('div');
+      marker.className = 'finger-touch';
+      fingerboard.appendChild(marker);
+      updateMarkerPos(marker, x, y);
+
+      const pitch = calculatePitch(closestIdx, yFraction);
+      const touchData = { stringIdx: closestIdx, yFraction, marker, pitch };
+      state.activeTouches.set(e.pointerId, touchData);
+
+      if (state.directTouch) {
+        touchData.synth = createSynthesizer(pitch);
+      }
+
+      updateTriggerSynth(closestIdx);
+    }
+
+    function handleTouchMove(e) {
+      if (!state.activeTouches.has(e.pointerId)) return;
+      const touchData = state.activeTouches.get(e.pointerId);
+
+      const rect = fingerboard.getBoundingClientRect();
+      const y = e.clientY - rect.top;
+      const x = e.clientX - rect.left;
+      const yFraction = y / rect.height;
+
+      touchData.yFraction = yFraction;
+      touchData.pitch = calculatePitch(touchData.stringIdx, yFraction);
+
+      updateMarkerPos(touchData.marker, x, y);
+
+      if (touchData.synth) {
+        touchData.synth.osc.frequency.setValueAtTime(touchData.pitch, AudioCtx.currentTime);
+      }
+      updateTriggerSynth(touchData.stringIdx);
+    }
+
+    function handleTouchEnd(e) {
+      if (!state.activeTouches.has(e.pointerId)) return;
+      const touchData = state.activeTouches.get(e.pointerId);
+
+      if (touchData.marker) touchData.marker.remove();
+      if (touchData.synth) stopSynthesizer(touchData.synth);
+
+      const strIdx = touchData.stringIdx;
+      state.activeTouches.delete(e.pointerId);
+
+      updateTriggerSynth(strIdx);
+    }
+
+    function updateMarkerPos(marker, x, y) {
+      marker.style.left = `${x}px`;
+      marker.style.top = `${y}px`;
+    }
+
+    function updateTriggerSynth(stringIdx) {
+      const isPressed = state.rhTriggerStates[stringIdx];
+      const activeSynthKey = `rh_${stringIdx}`;
+
+      if (!state.strings[stringIdx]) return;
+      let activePitch = state.strings[stringIdx].freq;
+      
+      state.activeTouches.forEach(t => {
+        if (t.stringIdx === stringIdx) {
+          activePitch = t.pitch;
+        }
+      });
+
+      if (isPressed) {
+        if (!activeTriggerSynths.has(activeSynthKey)) {
+          activeTriggerSynths.set(activeSynthKey, createSynthesizer(activePitch));
+        } else {
+          activeTriggerSynths.get(activeSynthKey).osc.frequency.setValueAtTime(activePitch, AudioCtx.currentTime);
+        }
+      } else {
+        if (activeTriggerSynths.has(activeSynthKey)) {
+          stopSynthesizer(activeTriggerSynths.get(activeSynthKey));
+          activeTriggerSynths.delete(activeSynthKey);
+        }
+      }
+    }
+
+    document.getElementById('presetSelect').addEventListener('change', (e) => {
+      const p = presets[e.target.value];
+      if (p) {
+        state.scaleLength = p.scale;
+        state.numFrets = p.frets;
+        state.strings = p.strings.map(f => ({ freq: f, isCustom: false }));
+        document.getElementById('scaleLength').value = p.scale;
+        document.getElementById('fretCount').value = p.frets;
+        document.getElementById('stringCount').value = p.strings.length;
+        rebuildLayout();
+      }
+    });
+
+    document.getElementById('scaleLength').addEventListener('change', (e) => {
+      state.scaleLength = parseFloat(e.target.value) || 326;
+      renderFrets();
+    });
+
+    document.getElementById('fretCount').addEventListener('change', (e) => {
+      state.numFrets = parseInt(e.target.value) || 14;
+      renderFrets();
+    });
+
+    document.getElementById('stringCount').addEventListener('change', (e) => {
+      let count = parseInt(e.target.value) || 4;
+      count = Math.max(1, Math.min(7, count));
+      e.target.value = count;
+
+      while (state.strings.length < count) {
+        const lastFreq = state.strings[state.strings.length - 1]?.freq || 220;
+        state.strings.push({ freq: parseFloat((lastFreq * 1.5).toFixed(2)), isCustom: false });
+      }
+      while (state.strings.length > count) {
+        state.strings.pop();
+      }
+      rebuildLayout();
+    });
+
+    document.getElementById('btnModeTouch').addEventListener('click', (e) => {
+      state.directTouch = !state.directTouch;
+      e.target.classList.toggle('active', state.directTouch);
+      e.target.textContent = `Direct Touch ${state.directTouch ? 'ON' : 'OFF'}`;
+    });
+
+    document.getElementById('btnToggleLabels').addEventListener('click', (e) => {
+      state.showNotes = !state.showNotes;
+      e.target.textContent = `Show Notes: ${state.showNotes ? 'ON' : 'OFF'}`;
+      renderFrets();
+    });
+
+    document.getElementById('stringSpacing').addEventListener('input', (e) => {
+      document.getElementById('stringGroup').style.gap = `${e.target.value}px`;
+    });
+
+    document.getElementById('stringGroupX').addEventListener('input', (e) => {
+      document.getElementById('stringGroup').style.left = `${e.target.value}%`;
+    });
+
+    document.getElementById('triggerSpacing').addEventListener('input', (e) => {
+      document.getElementById('trigger-container').style.gap = `${e.target.value}px`;
+    });
+
+    document.getElementById('triggerOffsetY').addEventListener('input', (e) => {
+      document.getElementById('trigger-container').style.transform = `translateY(${e.target.value}px)`;
+    });
+
+    window.addEventListener('resize', renderFrets);
+    window.addEventListener('load', rebuildLayout);
+  </script>
+</body>
+</html>
