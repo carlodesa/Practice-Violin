@@ -434,7 +434,6 @@
       bass:   { scale: 1050, frets: 12, strings: [41.20, 55.00, 73.42, 98.00] }
     };
 
-    // STEP 2: State Object
     const state = {
       scaleLength: 326,
       numFrets: 14,
@@ -496,7 +495,6 @@
       }, 100);
     }
 
-    // STEP 4: Audio Routing Logic ("Highest Finger Wins")
     const directTouchSynths = new Map();
     const activeTriggerSynths = new Map();
 
@@ -557,7 +555,6 @@
       }
     }
 
-    // STEP 3: Pixel Calibration & Pitch Calculation
     function getPixelsPerMm() {
       const div = document.createElement('div');
       div.style.height = '100mm';
@@ -569,6 +566,7 @@
       return pxPerMm;
     }
 
+    // ALIGNED TOUCH-TO-PITCH CALCULATION
     function calculatePitch(stringIdx, yPixels) {
       const baseFreq = state.strings[stringIdx].freq;
       let fraction;
@@ -579,7 +577,8 @@
         fraction = distanceMm / state.scaleLength;
       } else {
         const containerHeight = fingerboard ? (fingerboard.clientHeight || 500) : 500;
-        fraction = yPixels / containerHeight;
+        // Non-true-scale visual length represents 0.75 of total string scale length
+        fraction = (yPixels / containerHeight) * 0.75;
       }
 
       const clampedFraction = Math.max(0, Math.min(fraction, 0.75));
@@ -756,7 +755,6 @@
       });
     }
 
-    // STEP 5: Touch Event Handlers & Chrome Override
     window.addEventListener('contextmenu', (e) => e.preventDefault());
 
     const fingerboard = document.getElementById('fingerboard-container');
@@ -833,7 +831,6 @@
       updateTriggerSynth(strIdx);
     }
 
-    // STEP 6: Control Event Listeners
     document.getElementById('presetSelect').addEventListener('change', (e) => {
       const p = presets[e.target.value];
       if (p) {
