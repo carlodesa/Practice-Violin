@@ -260,20 +260,39 @@
       box-shadow: 0 0 12px var(--accent);
       z-index: 10;
     }
+    /* Hide settings panels when Focus Mode is active */
+body.focus-mode header,
+body.focus-mode #tuning-panel,
+body.focus-mode #layout-panel {
+  display: none !important;
+}
+
+/* Floating toggle button to restore controls */
+#btnToggleUI {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1000;
+  opacity: 0.4;
+  background: #222;
+  border: 1px solid #555;
+  font-size: 11px;
+}
+#btnToggleUI:active {
+  opacity: 1.0;
+}
   </style>
 </head>
 <body>
 
   <header>
-    <div class="control-group">
-      <label>Preset:</label>
-      <select id="presetSelect">
-        <option value="violin">Violin (G3, D4, A4, E5)</option>
-        <option value="viola">Viola (C3, G3, D4, A4)</option>
-        <option value="cello">Cello (C2, G2, D3, A3)</option>
-        <option value="bass">Double Bass (E1, A1, D2, G2)</option>
-        <option value="custom">Custom</option>
-      </select>
+ <div class="control-group">
+      <button id="btnModeTouch" class="active">Direct Touch ON</button>
+      <button id="btnToggleLabels">Show Notes: ON</button>
+      <button id="btnTrueScale">1:1 Scale: OFF</button>
+      <button id="btnHideUI">👁️ Hide Controls</button>
+      <button id="btnFullscreen">⛶ Fullscreen</button>
+      <button id="btnInstall">📥 Install App</button>
     </div>
 
     <div class="control-group">
@@ -297,7 +316,9 @@
       <button id="btnFullscreen">⛶ Fullscreen</button>
       <button id="btnInstall">📥 Install App</button>
     </div>
-  </header>
+ </header>
+
+  <button id="btnToggleUI" style="display: none;">⚙️ Show Controls</button>
 
   <div id="tuning-panel">
     <span style="font-size: 12px; font-weight: bold; color: var(--accent);">Tuning:</span>
@@ -406,6 +427,7 @@ if (screen.orientation && screen.orientation.lock) {
       numFrets: 14,
       directTouch: true,
       showNotes: true,
+      trueScale: false,
       activeTouches: new Map(),
       strings: [
         { freq: 196.00, isCustom: false },
@@ -460,13 +482,25 @@ if (screen.orientation && screen.orientation.lock) {
       }, 100);
     }
 
+    function getPixelsPerMm() {
+      const div = document.createElement('div');
+      div.style.height = '100mm';
+      div.style.position = 'absolute';
+      div.style.visibility = 'hidden';
+      document.body.appendChild(div);
+      const pxPerMm = div.getBoundingClientRect().height / 100;
+      document.body.removeChild(div);
+      return pxPerMm;
+    }
+
     function calculateFretPositions(scaleLen, boardHeight, maxFrets) {
       const frets = [];
-      const effectiveHeight = boardHeight > 0 ? boardHeight : 600;
+      const pxPerMm = state.trueScale ? getPixelsPerMm() : (boardHeight / scaleLen);
+
       for (let n = 1; n <= maxFrets; n++) {
         const d_n = scaleLen * (1 - Math.pow(2, -n / 12));
-        const fraction = d_n / scaleLen;
-        frets.push({ fretNumber: n, fraction, pixelY: fraction * effectiveHeight });
+        const pixelY = d_n * pxPerMm;
+        frets.push({ fretNumber: n, pixelY });
       }
       return frets;
     }
@@ -798,7 +832,26 @@ if (screen.orientation && screen.orientation.lock) {
     document.getElementById('triggerOffsetY').addEventListener('input', (e) => {
       document.getElementById('trigger-container').style.transform = `translateY(${e.target.value}px)`;
     });
+const btnHideUI = document.getElementById('btnHideUI');
+    const btnToggleUI = document.getElementById('btnToggleUI');
+    const btnTrueScale = document.getElementById('btnTrueScale');
 
+    function setFocusMode(enable) {
+      document.body.classList.toggle('focus-mode', enable);
+      btnToggleUI.style.display = enable ? 'block' : 'none';
+      renderFrets();
+    }
+
+    btnHideUI.addEventListener('click', () => setFocusMode(true));
+    btnToggleUI.addEventListener('click', () => setFocusMode(false));
+
+    btnTrueScale.addEventListener('click', (e) => {
+      state.trueScale = !state.trueScale;
+      e.target.textContent = `1:1 Scale: ${state.trueScale ? 'ON' : 'OFF'}`;
+      e.target.classList.toggle('active', state.trueScale);
+      renderFrets();
+    });
+    
     window.addEventListener('resize', renderFrets);
 
     if (document.readyState === 'loading') {
