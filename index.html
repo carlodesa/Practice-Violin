@@ -261,14 +261,12 @@
       z-index: 10;
     }
 
-    /* Hide settings panels when Focus Mode is active */
     body.focus-mode header,
     body.focus-mode #tuning-panel,
     body.focus-mode #layout-panel {
       display: none !important;
     }
 
-    /* Floating toggle button to restore controls */
     #btnToggleUI {
       position: absolute;
       top: 6px;
@@ -294,6 +292,7 @@
       <button id="btnModeTouch" class="active">Direct Touch ON</button>
       <button id="btnToggleLabels">Show Notes: ON</button>
       <button id="btnTrueScale">1:1 Scale: OFF</button>
+      <button id="btnSnapFrets">Snap Frets: OFF</button>
       <button id="btnHideUI">👁️ Hide Controls</button>
       <button id="btnFullscreen">⛶ Fullscreen</button>
       <button id="btnInstall">📥 Install App</button>
@@ -333,6 +332,11 @@
   </div>
 
   <div id="layout-panel">
+    <div class="control-group">
+      <label for="screenCalib">Screen Zoom Ratio:</label>
+      <input type="range" id="screenCalib" min="0.8" max="2.2" step="0.05" value="1.5">
+    </div>
+
     <span style="font-size: 12px; font-weight: bold; color: var(--accent);">Layout:</span>
     
     <div class="control-group">
@@ -430,12 +434,15 @@
       bass:   { scale: 1050, frets: 12, strings: [41.20, 55.00, 73.42, 98.00] }
     };
 
+    // STEP 2: State Object
     const state = {
       scaleLength: 326,
       numFrets: 14,
       directTouch: true,
       showNotes: true,
       trueScale: false,
+      snapToFrets: false,
+      screenCalibration: 1.5,
       activeTouches: new Map(),
       strings: [
         { freq: 196.00, isCustom: false },
@@ -447,7 +454,6 @@
     };
 
     let AudioCtx = null;
-    const activeTriggerSynths = new Map();
 
     function getAudioContext() {
       if (!AudioCtx) {
@@ -490,25 +496,114 @@
       }, 100);
     }
 
+    // STEP 4: Audio Routing Logic ("Highest Finger Wins")
+    const directTouchSynths = new Map();
+    const activeTriggerSynths = new Map();
+
+    function updateDirectSynth(stringIdx) {
+      if (!state.directTouch) {
+        if (directTouchSynths.has(stringIdx)) {
+          stopSynthesizer(directTouchSynths.get(stringIdx));
+          directTouchSynths.delete(stringIdx);
+        }
+        return;
+      }
+
+      let highestPitch = -1;
+      state.activeTouches.forEach(t => {
+        if (t.stringIdx === stringIdx && t.pitch > highestPitch) {
+          highestPitch = t.pitch;
+        }
+      });
+
+      if (highestPitch > 0) {
+        if (!directTouchSynths.has(stringIdx)) {
+          directTouchSynths.set(stringIdx, createSynthesizer(highestPitch));
+        } else if (AudioCtx) {
+          directTouchSynths.get(stringIdx).osc.frequency.setValueAtTime(highestPitch, AudioCtx.currentTime);
+        }
+      } else {
+        if (directTouchSynths.has(stringIdx)) {
+          stopSynthesizer(directTouchSynths.get(stringIdx));
+          directTouchSynths.delete(stringIdx);
+        }
+      }
+    }
+
+    function updateTriggerSynth(stringIdx) {
+      const isPressed = state.rhTriggerStates[stringIdx];
+      const activeSynthKey = `rh_${stringIdx}`;
+
+      if (!state.strings[stringIdx]) return;
+      let activePitch = state.strings[stringIdx].freq;
+      
+      state.activeTouches.forEach(t => {
+        if (t.stringIdx === stringIdx && t.pitch > activePitch) {
+          activePitch = t.pitch;
+        }
+      });
+
+      if (isPressed) {
+        if (!activeTriggerSynths.has(activeSynthKey)) {
+          activeTriggerSynths.set(activeSynthKey, createSynthesizer(activePitch));
+        } else if (AudioCtx) {
+          activeTriggerSynths.get(activeSynthKey).osc.frequency.setValueAtTime(activePitch, AudioCtx.currentTime);
+        }
+      } else {
+        if (activeTriggerSynths.has(activeSynthKey)) {
+          stopSynthesizer(activeTriggerSynths.get(activeSynthKey));
+          activeTriggerSynths.delete(activeSynthKey);
+        }
+      }
+    }
+
+    // STEP 3: Pixel Calibration & Pitch Calculation
     function getPixelsPerMm() {
       const div = document.createElement('div');
       div.style.height = '100mm';
       div.style.position = 'absolute';
       div.style.visibility = 'hidden';
       document.body.appendChild(div);
-      const pxPerMm = div.getBoundingClientRect().height / 100;
+      const pxPerMm = (div.getBoundingClientRect().height / 100) * state.screenCalibration;
       document.body.removeChild(div);
       return pxPerMm;
     }
 
-    function calculateFretPositions(scaleLen, boardHeight, maxFrets) {
-      const frets = [];
-      const pxPerMm = state.trueScale ? getPixelsPerMm() : (boardHeight / scaleLen);
+    function calculatePitch(stringIdx, yPixels) {
+      const baseFreq = state.strings[stringIdx].freq;
+      let fraction;
 
-      for (let n = 1; n <= maxFrets; n++) {
-        const d_n = scaleLen * (1 - Math.pow(2, -n / 12));
-        const pixelY = d_n * pxPerMm;
-        frets.push({ fretNumber: n, pixelY });
+      if (state.trueScale) {
+        const pxPerMm = getPixelsPerMm();
+        const distanceMm = yPixels / pxPerMm;
+        fraction = distanceMm / state.scaleLength;
+      } else {
+        const containerHeight = fingerboard ? (fingerboard.clientHeight || 500) : 500;
+        fraction = yPixels / containerHeight;
+      }
+
+      const clampedFraction = Math.max(0, Math.min(fraction, 0.75));
+
+      if (state.snapToFrets) {
+        const semitones = Math.round(-12 * Math.log2(1 - clampedFraction));
+        return baseFreq * Math.pow(2, semitones / 12);
+      }
+
+      return baseFreq / (1 - clampedFraction);
+    }
+
+    function calculateFretPositions(scaleLengthMm, containerHeightPx, numFrets) {
+      const frets = [];
+      const pxPerMm = getPixelsPerMm();
+      for (let i = 1; i <= numFrets; i++) {
+        const distanceMm = scaleLengthMm * (1 - Math.pow(2, -i / 12));
+        let pixelY;
+        if (state.trueScale) {
+          pixelY = distanceMm * pxPerMm;
+        } else {
+          pixelY = containerHeightPx * (distanceMm / (scaleLengthMm * 0.75));
+        }
+        frets.push({ fretNumber: i, pixelY, distanceMm });
       }
       return frets;
     }
@@ -661,11 +756,8 @@
       });
     }
 
-    function calculatePitch(stringIdx, yFraction) {
-      const baseFreq = state.strings[stringIdx].freq;
-      const clampedFraction = Math.max(0, Math.min(yFraction, 0.75));
-      return baseFreq / (1 - clampedFraction);
-    }
+    // STEP 5: Touch Event Handlers & Chrome Override
+    window.addEventListener('contextmenu', (e) => e.preventDefault());
 
     const fingerboard = document.getElementById('fingerboard-container');
 
@@ -674,11 +766,15 @@
     fingerboard.addEventListener('pointerup', handleTouchEnd);
     fingerboard.addEventListener('pointercancel', handleTouchEnd);
 
+    function updateMarkerPos(marker, x, y) {
+      marker.style.left = `${x}px`;
+      marker.style.top = `${y}px`;
+    }
+
     function handleTouchStart(e) {
       const rect = fingerboard.getBoundingClientRect();
       const y = e.clientY - rect.top;
       const x = e.clientX - rect.left;
-      const yFraction = y / rect.height;
 
       const wrappers = document.querySelectorAll('.string-wrapper');
       let closestIdx = 0;
@@ -699,14 +795,11 @@
       fingerboard.appendChild(marker);
       updateMarkerPos(marker, x, y);
 
-      const pitch = calculatePitch(closestIdx, yFraction);
-      const touchData = { stringIdx: closestIdx, yFraction, marker, pitch };
+      const pitch = calculatePitch(closestIdx, y);
+      const touchData = { stringIdx: closestIdx, y, marker, pitch };
       state.activeTouches.set(e.pointerId, touchData);
 
-      if (state.directTouch) {
-        touchData.synth = createSynthesizer(pitch);
-      }
-
+      updateDirectSynth(closestIdx);
       updateTriggerSynth(closestIdx);
     }
 
@@ -717,16 +810,13 @@
       const rect = fingerboard.getBoundingClientRect();
       const y = e.clientY - rect.top;
       const x = e.clientX - rect.left;
-      const yFraction = y / rect.height;
 
-      touchData.yFraction = yFraction;
-      touchData.pitch = calculatePitch(touchData.stringIdx, yFraction);
+      touchData.y = y;
+      touchData.pitch = calculatePitch(touchData.stringIdx, y);
 
       updateMarkerPos(touchData.marker, x, y);
 
-      if (touchData.synth && AudioCtx) {
-        touchData.synth.osc.frequency.setValueAtTime(touchData.pitch, AudioCtx.currentTime);
-      }
+      updateDirectSynth(touchData.stringIdx);
       updateTriggerSynth(touchData.stringIdx);
     }
 
@@ -735,46 +825,15 @@
       const touchData = state.activeTouches.get(e.pointerId);
 
       if (touchData.marker) touchData.marker.remove();
-      if (touchData.synth) stopSynthesizer(touchData.synth);
 
       const strIdx = touchData.stringIdx;
       state.activeTouches.delete(e.pointerId);
 
+      updateDirectSynth(strIdx);
       updateTriggerSynth(strIdx);
     }
 
-    function updateMarkerPos(marker, x, y) {
-      marker.style.left = `${x}px`;
-      marker.style.top = `${y}px`;
-    }
-
-    function updateTriggerSynth(stringIdx) {
-      const isPressed = state.rhTriggerStates[stringIdx];
-      const activeSynthKey = `rh_${stringIdx}`;
-
-      if (!state.strings[stringIdx]) return;
-      let activePitch = state.strings[stringIdx].freq;
-      
-      state.activeTouches.forEach(t => {
-        if (t.stringIdx === stringIdx) {
-          activePitch = t.pitch;
-        }
-      });
-
-      if (isPressed) {
-        if (!activeTriggerSynths.has(activeSynthKey)) {
-          activeTriggerSynths.set(activeSynthKey, createSynthesizer(activePitch));
-        } else if (AudioCtx) {
-          activeTriggerSynths.get(activeSynthKey).osc.frequency.setValueAtTime(activePitch, AudioCtx.currentTime);
-        }
-      } else {
-        if (activeTriggerSynths.has(activeSynthKey)) {
-          stopSynthesizer(activeTriggerSynths.get(activeSynthKey));
-          activeTriggerSynths.delete(activeSynthKey);
-        }
-      }
-    }
-
+    // STEP 6: Control Event Listeners
     document.getElementById('presetSelect').addEventListener('change', (e) => {
       const p = presets[e.target.value];
       if (p) {
@@ -817,6 +876,22 @@
       state.directTouch = !state.directTouch;
       e.target.classList.toggle('active', state.directTouch);
       e.target.textContent = `Direct Touch ${state.directTouch ? 'ON' : 'OFF'}`;
+      
+      if (!state.directTouch) {
+        directTouchSynths.forEach(synth => stopSynthesizer(synth));
+        directTouchSynths.clear();
+      }
+    });
+
+    document.getElementById('btnSnapFrets').addEventListener('click', (e) => {
+      state.snapToFrets = !state.snapToFrets;
+      e.target.classList.toggle('active', state.snapToFrets);
+      e.target.textContent = `Snap Frets: ${state.snapToFrets ? 'ON' : 'OFF'}`;
+    });
+
+    document.getElementById('screenCalib').addEventListener('input', (e) => {
+      state.screenCalibration = parseFloat(e.target.value);
+      renderFrets();
     });
 
     document.getElementById('btnToggleLabels').addEventListener('click', (e) => {
