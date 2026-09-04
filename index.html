@@ -260,39 +260,53 @@
       box-shadow: 0 0 12px var(--accent);
       z-index: 10;
     }
-    /* Hide settings panels when Focus Mode is active */
-body.focus-mode header,
-body.focus-mode #tuning-panel,
-body.focus-mode #layout-panel {
-  display: none !important;
-}
 
-/* Floating toggle button to restore controls */
-#btnToggleUI {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  z-index: 1000;
-  opacity: 0.4;
-  background: #222;
-  border: 1px solid #555;
-  font-size: 11px;
-}
-#btnToggleUI:active {
-  opacity: 1.0;
-}
+    /* Hide settings panels when Focus Mode is active */
+    body.focus-mode header,
+    body.focus-mode #tuning-panel,
+    body.focus-mode #layout-panel {
+      display: none !important;
+    }
+
+    /* Floating toggle button to restore controls */
+    #btnToggleUI {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      z-index: 1000;
+      opacity: 0.5;
+      background: #222;
+      border: 1px solid #555;
+      color: #fff;
+      padding: 6px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+    }
+    #btnToggleUI:active {
+      opacity: 1.0;
+    }
   </style>
 </head>
 <body>
 
   <header>
- <div class="control-group">
+    <div class="control-group">
       <button id="btnModeTouch" class="active">Direct Touch ON</button>
       <button id="btnToggleLabels">Show Notes: ON</button>
       <button id="btnTrueScale">1:1 Scale: OFF</button>
       <button id="btnHideUI">👁️ Hide Controls</button>
       <button id="btnFullscreen">⛶ Fullscreen</button>
       <button id="btnInstall">📥 Install App</button>
+    </div>
+
+    <div class="control-group">
+      <label for="presetSelect">Preset:</label>
+      <select id="presetSelect">
+        <option value="violin">Violin</option>
+        <option value="viola">Viola</option>
+        <option value="cello">Cello</option>
+        <option value="bass">Double Bass</option>
+      </select>
     </div>
 
     <div class="control-group">
@@ -309,14 +323,7 @@ body.focus-mode #layout-panel {
       <label for="stringCount">Strings:</label>
       <input type="number" id="stringCount" value="4" min="1" max="7">
     </div>
-
-    <div class="control-group">
-      <button id="btnModeTouch" class="active">Direct Touch ON</button>
-      <button id="btnToggleLabels">Show Notes: ON</button>
-      <button id="btnFullscreen">⛶ Fullscreen</button>
-      <button id="btnInstall">📥 Install App</button>
-    </div>
- </header>
+  </header>
 
   <button id="btnToggleUI" style="display: none;">⚙️ Show Controls</button>
 
@@ -363,12 +370,13 @@ body.focus-mode #layout-panel {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW Registration error:', err));
     }
-// Force browser orientation lock to portrait (allows 180 degree flip)
-if (screen.orientation && screen.orientation.lock) {
-  screen.orientation.lock('portrait').catch(err => {
-    console.log('Orientation lock not supported by device/browser:', err);
-  });
-}
+
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('portrait').catch(err => {
+        console.log('Orientation lock not supported by device/browser:', err);
+      });
+    }
+
     let deferredPrompt;
     const btnInstall = document.getElementById('btnInstall');
 
@@ -832,7 +840,8 @@ if (screen.orientation && screen.orientation.lock) {
     document.getElementById('triggerOffsetY').addEventListener('input', (e) => {
       document.getElementById('trigger-container').style.transform = `translateY(${e.target.value}px)`;
     });
-const btnHideUI = document.getElementById('btnHideUI');
+
+    const btnHideUI = document.getElementById('btnHideUI');
     const btnToggleUI = document.getElementById('btnToggleUI');
     const btnTrueScale = document.getElementById('btnTrueScale');
 
@@ -851,7 +860,7 @@ const btnHideUI = document.getElementById('btnHideUI');
       e.target.classList.toggle('active', state.trueScale);
       renderFrets();
     });
-    
+
     window.addEventListener('resize', renderFrets);
 
     if (document.readyState === 'loading') {
