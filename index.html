@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Stringboard">
 
-  <link rel="manifest" href='data:application/manifest+json,{"name":"Stringboard","short_name":"Stringboard","start_url":".","display":"fullscreen","orientation":"landscape","background_color":"#0c0c0e","theme_color":"#0c0c0e","icons":[{"src":"data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎻</text></svg>","sizes":"192x192","type":"image/svg+xml"}]}'>
+  <link rel="manifest" href="manifest.json">
 
   <title>Violin & String Practice Fingerboard</title>
   <style>
@@ -93,6 +93,13 @@
       background: var(--accent);
       color: #111;
       font-weight: bold;
+    }
+
+    #btnInstall {
+      background: #2e7d32;
+      border-color: #4caf50;
+      font-weight: bold;
+      display: none;
     }
 
     #tuning-panel, #layout-panel {
@@ -287,6 +294,8 @@
     <div class="control-group">
       <button id="btnModeTouch" class="active">Direct Touch ON</button>
       <button id="btnToggleLabels">Show Notes: ON</button>
+      <button id="btnFullscreen">⛶ Fullscreen</button>
+      <button id="btnInstall">📥 Install App</button>
     </div>
   </header>
 
@@ -330,6 +339,40 @@
   </div>
 
   <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW Registration error:', err));
+    }
+
+    let deferredPrompt;
+    const btnInstall = document.getElementById('btnInstall');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      btnInstall.style.display = 'inline-block';
+    });
+
+    btnInstall.addEventListener('click', async () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+          btnInstall.style.display = 'none';
+        }
+        deferredPrompt = null;
+      }
+    });
+
+    document.getElementById('btnFullscreen').addEventListener('click', () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => console.log(err));
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      }
+    });
+
     const NOTE_NAMES = ['C', 'C#/Db', 'D', 'D#/Eb', 'E', 'F', 'F#/Gb', 'G', 'G#/Ab', 'A', 'A#/Bb', 'B'];
 
     function generateNoteTable() {
@@ -383,7 +426,6 @@
 
     function createSynthesizer(freq) {
       const ctx = getAudioContext();
-      
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       const filter = ctx.createBiquadFilter();
